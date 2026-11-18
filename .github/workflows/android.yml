@@ -14,6 +14,9 @@ env:
 defaults:
   run:
     working-directory: app
+    # Naming bash adds pipefail, so `flutter build ... | tee build.log` fails
+    # the step when the build fails instead of taking tee's exit code.
+    shell: bash
 
 jobs:
   checks:
