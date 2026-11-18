@@ -56,8 +56,10 @@ as a bearer token:
 curl -H "Authorization: Bearer <key>" http://<your-ip>:8080/api/accounts
 ```
 
-Requests without a valid key get `401`. The server sends no CORS headers, so
-other websites cannot read its responses. The examples below omit the header
+Requests without a valid key get `401`, and clients outside private network
+ranges get `403`. The server sends no CORS headers, so other websites cannot
+read its responses. It stops itself after 15 minutes without an authorized
+request. The examples below omit the header
 for brevity.
 
 ---

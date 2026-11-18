@@ -50,9 +50,20 @@ class ServerService {
   String? _localIp;
   Directory? _webappDir;
   String? _accessKey;
+  Timer? _idleTimer;
 
   static const String _accessKeyParam = 'key';
   static const String _accessCookie = 'totals_dashboard_key';
+
+  /// The server stops itself after this long without an authorized request,
+  /// so a forgotten dashboard doesn't keep financial data on the network.
+  static const Duration idleTimeout = Duration(minutes: 15);
+
+  final StreamController<void> _idleStopController =
+      StreamController<void>.broadcast();
+
+  /// Fires when the server stops itself after [idleTimeout].
+  Stream<void> get idleStopStream => _idleStopController.stream;
 
   // Request logging
   final StreamController<ServerLogEntry> _logController =
@@ -217,11 +228,13 @@ class ServerService {
 
     final handler = const Pipeline()
         .addMiddleware(_loggingMiddleware())
+        .addMiddleware(_privateNetworkMiddleware())
         .addMiddleware(_accessKeyMiddleware())
         .addHandler(cascade.handler);
 
     _accessKey = _generateAccessKey();
     _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
+    _resetIdleTimer();
     print('Server running at $serverUrl');
     print('Serving files from: ${_webappDir!.path}');
   }
@@ -365,10 +378,12 @@ class ServerService {
               },
             );
           }
+          _resetIdleTimer();
           return handler(request);
         }
 
         if (_hasValidCookie(request, key) || _hasValidBearer(request, key)) {
+          _resetIdleTimer();
           return handler(request);
         }
 
@@ -379,6 +394,32 @@ class ServerService {
         );
       };
     };
+  }
+
+  /// Refuses clients outside the local network, e.g. someone reaching the
+  /// phone's public mobile-data address.
+  Middleware _privateNetworkMiddleware() {
+    return (Handler handler) {
+      return (Request request) {
+        final info = request.context['shelf.io.connection_info'];
+        final address = info is HttpConnectionInfo ? info.remoteAddress : null;
+        if (address == null || !NetworkUtils.isPrivateOrLoopback(address)) {
+          return Response.forbidden(
+            'The Totals dashboard is only available on your local network.',
+          );
+        }
+        return handler(request);
+      };
+    };
+  }
+
+  void _resetIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(idleTimeout, () async {
+      if (_server == null) return;
+      await stopServer();
+      if (!_idleStopController.isClosed) _idleStopController.add(null);
+    });
   }
 
   bool _hasValidCookie(Request request, String key) {
@@ -422,6 +463,8 @@ class ServerService {
       return;
     }
 
+    _idleTimer?.cancel();
+    _idleTimer = null;
     await _server!.close(force: true);
     _server = null;
     _localIp = null;
@@ -442,6 +485,8 @@ class ServerService {
   }
 
   void dispose() {
+    _idleTimer?.cancel();
+    _idleStopController.close();
     _randomNumberController.close();
     _logController.close();
   }

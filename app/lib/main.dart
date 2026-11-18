@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:totals/bootstrap/app_bootstrap.dart';
 import 'package:totals/providers/insights_provider.dart';
@@ -95,6 +96,9 @@ void main() {
   // Flag this as the main isolate so the Data Sync enqueuer drains inline here
   // (background isolates defer to the periodic task / signal bridge instead).
   SyncEnqueuer.isMainIsolate = true;
+  // Fonts ship in assets/google_fonts, so never download them from Google.
+  GoogleFonts.config.allowRuntimeFetching = false;
+  LicenseRegistry.addLicense(_bundledFontLicenses);
   try {
     SharedExpensePushNotificationService.registerBackgroundHandler();
   } catch (error, stackTrace) {
@@ -114,6 +118,21 @@ void main() {
       ),
     ),
   );
+}
+
+Stream<LicenseEntry> _bundledFontLicenses() async* {
+  const families = {
+    'inter': 'Inter',
+    'montserrat': 'Montserrat',
+    'poppins': 'Poppins',
+    'roboto': 'Roboto',
+    'spacegrotesk': 'Space Grotesk',
+  };
+  for (final entry in families.entries) {
+    final license = await rootBundle
+        .loadString('assets/google_fonts/licenses/OFL-${entry.key}.txt');
+    yield LicenseEntryWithLineBreaks([entry.value], license);
+  }
 }
 
 class MyApp extends StatelessWidget {

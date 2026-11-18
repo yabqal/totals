@@ -1,0 +1,140 @@
+name: Android
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.38.4"
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  checks:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Analyze (fails on errors only)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - run: flutter test
+
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    env:
+      GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+      MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # The Google Services Gradle plugin refuses to build without this file.
+      # Without the secret, a placeholder lets the app build; shared-expense
+      # push notifications won't work in that build.
+      - name: Add google-services.json
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON_BASE64 not set; using a placeholder Firebase config."
+            cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "totals-ci-placeholder",
+              "storage_bucket": "totals-ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000001",
+                  "android_client_info": { "package_name": "detached.totals" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "placeholder" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000002",
+                  "android_client_info": { "package_name": "detached.totals.test" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "placeholder" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+          fi
+
+      # flutter pub get creates android/local.properties; the map key is read
+      # from there. Without it the Spending Map shows a blank map.
+      - name: Add Maps API key
+        if: env.MAPS_API_KEY != ''
+        run: echo "MAPS_API_KEY=$MAPS_API_KEY" >> android/local.properties
+
+      - name: Add release signing key
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build signed release
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          flutter build apk --release --flavor stable
+          flutter build appbundle --release --flavor stable
+
+      # Debug builds use the qa flavor (detached.totals.test, "totals-test"),
+      # which installs next to the Play Store app instead of replacing it.
+      - name: Build debug APK
+        if: env.KEYSTORE_BASE64 == ''
+        run: flutter build apk --debug --flavor qa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: totals-android
+          path: |
+            app/build/app/outputs/flutter-apk/*.apk
+            app/build/app/outputs/bundle/stableRelease/*.aab
+          if-no-files-found: error

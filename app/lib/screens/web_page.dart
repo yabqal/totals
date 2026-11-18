@@ -18,6 +18,7 @@ class _WebPageState extends State<WebPage> {
   final ScrollController _scrollController = ScrollController();
   final List<_ConsoleEntry> _consoleEntries = [];
   StreamSubscription<ServerLogEntry>? _logSubscription;
+  StreamSubscription<void>? _idleStopSubscription;
 
   bool _isLoading = false;
   bool _isNerdMode = false; // Toggle between simple and console mode
@@ -27,6 +28,15 @@ class _WebPageState extends State<WebPage> {
   void initState() {
     super.initState();
     _loadNetworkInfo();
+    _idleStopSubscription = _serverService.idleStopStream.listen((_) {
+      if (!mounted) return;
+      _logSubscription?.cancel();
+      _addSystemLog(
+        context.l10nTextRead(
+          'Server stopped after 15 minutes without activity.',
+        ),
+      );
+    });
     _addSystemLog('Console initialized. Ready to start server.');
   }
 
@@ -42,6 +52,7 @@ class _WebPageState extends State<WebPage> {
   @override
   void dispose() {
     _logSubscription?.cancel();
+    _idleStopSubscription?.cancel();
     _scrollController.dispose();
     _serverService.stopServer();
     _serverService.dispose();

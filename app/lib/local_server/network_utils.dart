@@ -49,6 +49,25 @@ class NetworkUtils {
     return null;
   }
 
+  /// True for loopback, link-local and private-range addresses (10/8,
+  /// 172.16/12, 192.168/16, fc00::/7) — the clients a home or hotspot network
+  /// can have. Public addresses, e.g. reaching the phone over mobile data,
+  /// return false.
+  static bool isPrivateOrLoopback(InternetAddress address) {
+    if (address.isLoopback || address.isLinkLocal) return true;
+    final bytes = address.rawAddress;
+    if (address.type == InternetAddressType.IPv4) {
+      final a = bytes[0], b = bytes[1];
+      return a == 10 ||
+          (a == 172 && b >= 16 && b <= 31) ||
+          (a == 192 && b == 168);
+    }
+    if (address.type == InternetAddressType.IPv6) {
+      return (bytes[0] & 0xFE) == 0xFC;
+    }
+    return false;
+  }
+
   /// Gets the Wi-Fi IP address specifically (wlan0, swlan0, etc.)
   static Future<String?> getWifiIpAddress() async {
     try {

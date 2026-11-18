@@ -122,6 +122,8 @@ flutter:
     - assets/webapp/
     - assets/webapp/assets/
     - assets/icon/totals_icon.png
+    - assets/google_fonts/
+    - assets/google_fonts/licenses/
     - PRIVACY_POLICY.md
   uses-material-design: true
 
