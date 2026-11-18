@@ -140,8 +140,8 @@ class _WebPageState extends State<WebPage> {
   }
 
   void _copyUrl() {
-    if (_serverService.serverUrl != null) {
-      Clipboard.setData(ClipboardData(text: _serverService.serverUrl!));
+    if (_serverService.accessUrl != null) {
+      Clipboard.setData(ClipboardData(text: _serverService.accessUrl!));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(context.l10nTextRead('URL copied to clipboard!')),
@@ -156,8 +156,8 @@ class _WebPageState extends State<WebPage> {
   }
 
   Future<void> _openDashboard() async {
-    if (_serverService.serverUrl != null) {
-      final uri = Uri.parse(_serverService.serverUrl!);
+    if (_serverService.accessUrl != null) {
+      final uri = Uri.parse(_serverService.accessUrl!);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
@@ -165,8 +165,8 @@ class _WebPageState extends State<WebPage> {
   }
 
   Future<void> _openDocs() async {
-    if (_serverService.serverUrl != null) {
-      final docsUrl = '${_serverService.serverUrl}/docs';
+    final docsUrl = _serverService.docsUrl;
+    if (docsUrl != null) {
       final uri = Uri.parse(docsUrl);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -388,7 +388,7 @@ class _WebPageState extends State<WebPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    _serverService.serverUrl!,
+                                    _serverService.accessUrl!,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
@@ -596,7 +596,7 @@ class _WebPageState extends State<WebPage> {
                                     ),
                                   ),
                                   child: Text(
-                                    '${_serverService.serverUrl}/docs',
+                                    _serverService.docsUrl ?? '',
                                     style: TextStyle(
                                       color: isDark
                                           ? Colors.white.withOpacity(0.9)

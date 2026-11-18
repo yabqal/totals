@@ -46,6 +46,33 @@ void main() {
       );
     });
 
+    test('absolute path on the destination origin is honored', () {
+      final uri = SyncPathTemplate.resolve(
+        'https://api.example.com/v1',
+        'https://api.example.com/v2/txns/{reference}',
+        {'reference': 'ABC'},
+      );
+      expect(uri.toString(), 'https://api.example.com/v2/txns/ABC');
+    });
+
+    test('absolute path cannot leave the destination origin', () {
+      for (final template in [
+        'http://api.example.com/txns',
+        'https://evil.example.net/txns',
+        'https://api.example.com:8443/txns',
+      ]) {
+        expect(
+          () => SyncPathTemplate.resolve(
+            'https://api.example.com',
+            template,
+            const {},
+          ),
+          throwsA(isA<SyncTemplateException>()),
+          reason: template,
+        );
+      }
+    });
+
     test('numeric placeholder values stringify', () {
       final uri = SyncPathTemplate.resolve(
         'https://x.io',

@@ -277,20 +277,14 @@ class BankConfigService {
 
   Future<bool> _hasInternetConnection() async {
     try {
-      final connectivityResult = await Connectivity().checkConnectivity();
-      // Check if we have any connection (mobile, wifi, ethernet, etc.)
-      if (connectivityResult == ConnectivityResult.none) {
-        return false;
-      }
-      // Additional check: try to reach a known server
-      try {
-        final response = await http
-            .get(Uri.parse('https://www.google.com'))
-            .timeout(const Duration(seconds: 3));
-        return response.statusCode == 200;
-      } catch (e) {
-        return false;
-      }
+      final connectivityResults = await Connectivity().checkConnectivity();
+      // Check if we have any connection (mobile, wifi, ethernet, etc.). The
+      // config fetch itself times out if the network can't reach the server,
+      // so there is no separate probe of a third-party site.
+      return connectivityResults.isNotEmpty &&
+          connectivityResults.any(
+            (result) => result != ConnectivityResult.none,
+          );
     } catch (e) {
       print("debug: Error checking connectivity: $e");
       return false;

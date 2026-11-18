@@ -92,6 +92,13 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="shared_expenses"
         />
+        <!-- Don't fetch a push token at startup. The app enables auto-init
+             only after the user creates, joins or restores a shared expense
+             group (SharedExpensePushNotificationService.activate). -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false"
+        />
 
         <receiver
             android:name=".ExpenseWidgetProvider"

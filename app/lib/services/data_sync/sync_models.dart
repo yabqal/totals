@@ -706,9 +706,20 @@ class SyncPathTemplate {
       path = '/$path';
     }
 
-    // A template may itself be an absolute URL (rare) — honor it.
+    // A template may itself be an absolute URL (rare) — honor it only on the
+    // destination's own scheme, host and port. Anything else could downgrade
+    // to http:// or send the destination's credentials to another server.
     if (path.startsWith('http://') || path.startsWith('https://')) {
-      return Uri.parse(path);
+      final absolute = Uri.parse(path);
+      final destination = Uri.parse(base);
+      if (absolute.scheme != destination.scheme ||
+          absolute.host.toLowerCase() != destination.host.toLowerCase() ||
+          absolute.port != destination.port) {
+        throw SyncTemplateException(
+          'Absolute paths must stay on the destination URL ($base).',
+        );
+      }
+      return absolute;
     }
     return Uri.parse('$base$path');
   }

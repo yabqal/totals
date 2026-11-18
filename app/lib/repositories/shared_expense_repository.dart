@@ -10,6 +10,7 @@ import 'package:totals/models/shared_expense_group.dart';
 import 'package:totals/services/notification_service.dart';
 import 'package:totals/services/shared_expense_realtime_bus.dart';
 import 'package:totals/services/shared_expense_crypto_service.dart';
+import 'package:totals/services/shared_expense_notification_coordinator.dart';
 import 'package:totals/services/shared_expense_push_notification_service.dart';
 import 'package:totals/services/shared_expense_vault_service.dart';
 import 'package:totals/services/totals_engine_client.dart';
@@ -277,7 +278,7 @@ class SharedExpenseRepository {
       _sharedExpenseLog(
         'createGroup engine success group=${_logId(group.id)}',
       );
-      await SharedExpensePushNotificationService.instance.syncRegistration();
+      await activateRealtimeServices();
       unawaited(SharedExpenseVaultService.instance.syncIfUnlocked());
       return group;
     } catch (error, stackTrace) {
@@ -370,9 +371,27 @@ class SharedExpenseRepository {
       'joinGroup done group=${_logId(groupId)} status=${result.status.name} '
       'syncApplied=$changed',
     );
-    await SharedExpensePushNotificationService.instance.syncRegistration();
+    await activateRealtimeServices();
     unawaited(SharedExpenseVaultService.instance.syncIfUnlocked());
     return result;
+  }
+
+  /// Engine streams and push registration stay off until a group exists, so
+  /// people who never use shared expenses never contact the engine or
+  /// Firebase. Call this once a group is created, joined or restored.
+  Future<void> activateRealtimeServices() async {
+    unawaited(SharedExpenseNotificationCoordinator.instance.start());
+    await SharedExpensePushNotificationService.instance.activate();
+  }
+
+  /// Starts the realtime services at launch only when a group already exists.
+  Future<void> activateRealtimeServicesIfInUse() async {
+    if ((await getGroups()).isEmpty) {
+      await SharedExpensePushNotificationService.instance
+          .disableAutoInitUntilActivated();
+      return;
+    }
+    await activateRealtimeServices();
   }
 
   Future<void> leaveGroup(SharedExpenseGroup group) async {
@@ -660,6 +679,13 @@ class SharedExpenseRepository {
   Future<List<SharedExpenseGroup>> refreshGroups() async {
     _sharedExpenseLog('refreshGroups start');
     final localGroups = await getGroups();
+    // Server groups without a local row are skipped below, so with no local
+    // groups there is nothing to merge. Returning early keeps people who never
+    // use shared expenses from contacting the engine at all.
+    if (localGroups.isEmpty) {
+      _sharedExpenseLog('refreshGroups skipped: no local groups');
+      return localGroups;
+    }
     final localById = {for (final group in localGroups) group.id: group};
     final serverGroups = await _engineClient.listGroups();
     final serverGroupIds = serverGroups.map((group) => group.id).toSet();

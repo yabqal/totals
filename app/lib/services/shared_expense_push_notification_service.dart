@@ -88,8 +88,34 @@ class SharedExpensePushNotificationService {
     if (initialMessage != null) _handleNotificationTap(initialMessage);
   }
 
+  /// Starts push handling, or refreshes the registration when it is already
+  /// running. Called once the user has a shared expense group.
+  Future<void> activate() async {
+    if (_started) {
+      await syncRegistration();
+    } else {
+      await start();
+    }
+  }
+
+  /// Keeps Firebase from fetching a push token on its own while shared
+  /// expenses are unused. Earlier versions enabled auto-init for everyone, and
+  /// that choice persists on the device, so it has to be turned back off.
+  Future<void> disableAutoInitUntilActivated() async {
+    if (_started || !_supportsFcm) return;
+    if (!await _ensureFirebaseReady()) return;
+    try {
+      await FirebaseMessaging.instance.setAutoInitEnabled(false);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('debug: Could not disable FCM auto-init: $error');
+      }
+    }
+  }
+
   Future<void> syncRegistration() async {
-    if (!_supportsFcm) return;
+    // Nothing to register until shared expenses are in use; see [activate].
+    if (!_started || !_supportsFcm) return;
     if (!await _ensureFirebaseReady()) return;
 
     try {

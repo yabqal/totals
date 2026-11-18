@@ -49,6 +49,10 @@ class ServerService {
   HttpServer? _server;
   String? _localIp;
   Directory? _webappDir;
+  String? _accessKey;
+
+  static const String _accessKeyParam = 'key';
+  static const String _accessCookie = 'totals_dashboard_key';
 
   // Request logging
   final StreamController<ServerLogEntry> _logController =
@@ -107,6 +111,23 @@ class ServerService {
     if (_server == null) return null;
     return 'http://localhost:${_server!.port}';
   }
+
+  /// Dashboard link including the access key. Share this, not [serverUrl].
+  String? get accessUrl {
+    final base = serverUrl;
+    if (base == null || _accessKey == null) return null;
+    return '$base/?$_accessKeyParam=$_accessKey';
+  }
+
+  /// API docs link including the access key.
+  String? get docsUrl {
+    final base = serverUrl;
+    if (base == null || _accessKey == null) return null;
+    return '$base/docs?$_accessKeyParam=$_accessKey';
+  }
+
+  /// Key for `Authorization: Bearer` when calling the API from scripts.
+  String? get accessKey => _accessKey;
 
   Future<void> startServer({int port = 8080}) async {
     if (_server != null) {
@@ -196,9 +217,10 @@ class ServerService {
 
     final handler = const Pipeline()
         .addMiddleware(_loggingMiddleware())
-        .addMiddleware(_corsMiddleware())
+        .addMiddleware(_accessKeyMiddleware())
         .addHandler(cascade.handler);
 
+    _accessKey = _generateAccessKey();
     _server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
     print('Server running at $serverUrl');
     print('Serving files from: ${_webappDir!.path}');
@@ -311,27 +333,88 @@ class ServerService {
     };
   }
 
-  /// CORS middleware for development
-  Middleware _corsMiddleware() {
+  /// Requires the per-session access key on every request, so other devices
+  /// on the network and websites open in a browser cannot read or change
+  /// financial data. Opening [accessUrl] trades the key in the link for an
+  /// HttpOnly, SameSite=Lax cookie that the dashboard's same-origin
+  /// requests then carry. Scripts can send `Authorization: Bearer <key>`.
+  Middleware _accessKeyMiddleware() {
     return (Handler handler) {
       return (Request request) async {
-        // Handle preflight requests
-        if (request.method == 'OPTIONS') {
-          return Response.ok('', headers: _corsHeaders);
+        final key = _accessKey;
+        if (key == null) {
+          return Response.forbidden('Server is not running.');
         }
 
-        final response = await handler(request);
-        return response.change(headers: _corsHeaders);
+        final queryKey = request.url.queryParameters[_accessKeyParam];
+        if (queryKey != null && _constantTimeEquals(queryKey, key)) {
+          final isApi = request.url.path.startsWith('api/');
+          if (request.method == 'GET' && !isApi) {
+            // Drop the key from the address bar so it doesn't linger in
+            // browser history.
+            final params = Map<String, String>.of(request.url.queryParameters)
+              ..remove(_accessKeyParam);
+            final query =
+                params.isEmpty ? '' : '?${Uri(queryParameters: params).query}';
+            return Response.found(
+              '/${request.url.path}$query',
+              headers: {
+                'Set-Cookie':
+                    '$_accessCookie=$key; Path=/; HttpOnly; SameSite=Lax',
+                'Cache-Control': 'no-store',
+              },
+            );
+          }
+          return handler(request);
+        }
+
+        if (_hasValidCookie(request, key) || _hasValidBearer(request, key)) {
+          return handler(request);
+        }
+
+        return Response(
+          401,
+          body: 'Open the private link shown in the Totals app.',
+          headers: {'Content-Type': 'text/plain; charset=utf-8'},
+        );
       };
     };
   }
 
-  Map<String, String> get _corsHeaders => {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers':
-            'Origin, Content-Type, Accept, Authorization',
-      };
+  bool _hasValidCookie(Request request, String key) {
+    final header = request.headers['cookie'];
+    if (header == null) return false;
+    for (final part in header.split(';')) {
+      final separator = part.indexOf('=');
+      if (separator <= 0) continue;
+      if (part.substring(0, separator).trim() != _accessCookie) continue;
+      if (_constantTimeEquals(part.substring(separator + 1).trim(), key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _hasValidBearer(Request request, String key) {
+    final header = request.headers['authorization'];
+    if (header == null || !header.startsWith('Bearer ')) return false;
+    return _constantTimeEquals(header.substring(7).trim(), key);
+  }
+
+  static bool _constantTimeEquals(String a, String b) {
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
+    }
+    return diff == 0;
+  }
+
+  static String _generateAccessKey() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(24, (_) => random.nextInt(256));
+    return base64Url.encode(bytes).replaceAll('=', '');
+  }
 
   Future<void> stopServer() async {
     if (_server == null) {
@@ -342,6 +425,7 @@ class ServerService {
     await _server!.close(force: true);
     _server = null;
     _localIp = null;
+    _accessKey = null;
 
     // Clean up temp directory
     if (_webappDir != null && await _webappDir!.exists()) {

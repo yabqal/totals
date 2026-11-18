@@ -68,8 +68,8 @@ class _ServerTestScreenState extends State<ServerTestScreen> {
 
   String get _displayUrl {
     if (_serverService.isRunning) {
-      // Use serverUrl which contains the network IP
-      return _serverService.serverUrl ??
+      // accessUrl carries the network IP and the per-session access key.
+      return _serverService.accessUrl ??
           'http://$_networkIp:${_serverService.port}';
     }
     return 'Server not running';

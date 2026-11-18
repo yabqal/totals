@@ -15,6 +15,7 @@ import 'package:totals/utils/text_utils.dart';
 import 'package:totals/data/all_banks_from_assets.dart';
 import 'package:totals/constants/cash_constants.dart';
 import 'package:totals/utils/account_sort.dart';
+import 'package:totals/utils/jpeg_metadata_stripper.dart';
 
 class VerifyPaymentsPage extends StatefulWidget {
   const VerifyPaymentsPage({super.key});
@@ -258,9 +259,15 @@ class _VerifyPaymentsPageState extends State<VerifyPaymentsPage> {
         'Accept': 'application/json',
       });
 
-      // Add image file
+      // Add image file without EXIF, so GPS position, device details and
+      // capture time stay on the phone.
+      final imageBytes = stripJpegMetadata(await imageFile.readAsBytes());
       request.files.add(
-        await http.MultipartFile.fromPath('image', imageFile.path),
+        http.MultipartFile.fromBytes(
+          'image',
+          imageBytes,
+          filename: imageFile.uri.pathSegments.last,
+        ),
       );
 
       // Send request with timeout

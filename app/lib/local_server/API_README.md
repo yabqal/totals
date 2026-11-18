@@ -44,6 +44,22 @@ Once the server is running, you can access the API from:
 - **Same device**: `http://localhost:8080`
 - **Other devices on same network**: `http://<your-ip>:8080` (e.g., `http://192.168.1.100:8080`)
 
+### Authentication
+
+Every request needs the access key that is generated each time the server
+starts. The link shown in the app (`http://<your-ip>:8080/?key=<key>`) sets an
+`HttpOnly`, `SameSite=Lax` cookie and then removes the key from the address
+bar, so the dashboard works without further setup. From scripts, send the key
+as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer <key>" http://<your-ip>:8080/api/accounts
+```
+
+Requests without a valid key get `401`. The server sends no CORS headers, so
+other websites cannot read its responses. The examples below omit the header
+for brevity.
+
 ---
 
 ## Base URL

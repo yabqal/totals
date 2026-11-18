@@ -590,10 +590,9 @@ class _RedesignSharedExpensesPageState extends State<RedesignSharedExpensesPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.navigationController?._attach(this);
+    // _loadGroups opens the engine streams once a local group exists.
     _loadGroups(refreshFromEngine: true, showErrors: false);
     _startPolling();
-    _startGroupListRealtimeSubscription();
-    _startPendingRealtimeSubscription();
     _vaultRestoreSubscription =
         SharedExpenseVaultService.instance.onRestore.listen(
       (_) => _onVaultIdentityRestored(),
@@ -769,6 +768,8 @@ class _RedesignSharedExpensesPageState extends State<RedesignSharedExpensesPage>
 
   void _startGroupListRealtimeSubscription() {
     if (_groupListRealtimeSubscription != null) return;
+    // No groups means nothing to stream; don't contact the engine.
+    if (_groups.isEmpty) return;
     _sharedExpensesPageLog('group list realtime subscribe');
     _groupListRealtimeSubscription =
         _repository.watchGroupListRealtime().listen(
@@ -867,10 +868,12 @@ class _RedesignSharedExpensesPageState extends State<RedesignSharedExpensesPage>
           _myPublicKey = myPublicKey;
         });
         _syncRealtimeSubscriptions(localGroups);
+        _startGroupListRealtimeSubscription();
+        _startPendingRealtimeSubscription();
         _tryOpenPendingNotificationGroup();
       }
 
-      if (refreshFromEngine) {
+      if (refreshFromEngine && localGroups.isNotEmpty) {
         final groups = await _repository.refreshGroups();
         final reachable = await _repository.isEngineReachable();
         if (mounted) {
@@ -1067,6 +1070,7 @@ class _RedesignSharedExpensesPageState extends State<RedesignSharedExpensesPage>
   void _startPendingRealtimeSubscription() {
     if (_pendingRealtimeSubscription != null) return;
     if (_pendingRealtimeReconnectTimer != null) return;
+    if (_groups.isEmpty) return;
     _sharedExpensesPageLog('pending realtime subscribe');
 
     final subscription = _repository.watchAllGroupsRealtime().listen(

@@ -36,8 +36,8 @@ import 'package:totals/services/bank_detection_startup_service.dart';
 import 'package:totals/services/bank_config_service.dart';
 import 'package:totals/services/notification_service.dart';
 import 'package:totals/services/notification_intent_bus.dart';
+import 'package:totals/repositories/shared_expense_repository.dart';
 import 'package:totals/services/shared_expense_notification_coordinator.dart';
-import 'package:totals/services/shared_expense_push_notification_service.dart';
 import 'package:totals/services/shared_expense_vault_service.dart';
 import 'package:totals/services/background_refresh_signal_service.dart';
 import 'package:totals/services/background_sync_signal_service.dart';
@@ -127,8 +127,9 @@ class RedesignShellState extends State<RedesignShell>
     });
     unawaited(ConnectivityService.instance.start());
     unawaited(SyncService.instance.requestDrain(reason: 'startup'));
-    unawaited(SharedExpenseNotificationCoordinator.instance.start());
-    unawaited(SharedExpensePushNotificationService.instance.start());
+    // Shared expenses contact the engine and Firebase only for people who
+    // have a group; everyone else stays fully offline here.
+    unawaited(SharedExpenseRepository().activateRealtimeServicesIfInUse());
     unawaited(SharedExpenseVaultService.instance.ensureInitialized());
     unawaited(_loadActiveProfileId());
 

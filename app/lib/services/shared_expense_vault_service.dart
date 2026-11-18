@@ -280,6 +280,9 @@ class SharedExpenseVaultService extends ChangeNotifier {
       //    expenses, and member meta materialise. Those snapshots will
       //    publish to the bus on arrival via the existing SSE consumer.
       await _repository.requestSnapshotsForAllGroups();
+      // 5. Restored groups now exist locally, so start the background
+      //    streams and push registration that stay off until then.
+      await _repository.activateRealtimeServices();
       _vaultLog(
         'rehydrateAfterRestore done published=${groups.length}',
       );
