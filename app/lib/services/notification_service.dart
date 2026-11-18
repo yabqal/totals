@@ -221,7 +221,7 @@ class NotificationService {
       if (categoryId == null) return;
 
       if (kDebugMode) {
-        print('debug: Quick categorize: $reference -> category $categoryId');
+        print('debug: Quick categorize -> category $categoryId');
       }
 
       // Find and update the transaction

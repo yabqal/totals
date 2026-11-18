@@ -49,7 +49,7 @@ class AccountRegistrationService {
     // Check if account already exists
     final exists = await _accountRepo.accountExists(accountNumber, bankId);
     if (exists) {
-      print("debug: Account $accountNumber for bank $bankId already exists");
+      print("debug: Account for bank $bankId already exists");
       return null;
     }
 
@@ -61,7 +61,7 @@ class AccountRegistrationService {
       accountHolderName: accountHolderName,
     );
     await _accountRepo.saveAccount(account);
-    print("debug: Account registered: $accountNumber");
+    print("debug: Account registered");
 
     // Sync previous SMS in background if requested
     if (syncPreviousSms) {

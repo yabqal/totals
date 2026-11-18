@@ -20,7 +20,6 @@ class SmsUtils {
           extracted = extracted.substring(0, extracted.length - 1);
         }
 
-        print("debug: Credited Amount: ETB $extracted");
         creditedAmount = double.tryParse(extracted.trim());
       }
       String? last4Digits;
@@ -63,18 +62,12 @@ class SmsUtils {
           extracted = extracted.substring(0, extracted.length - 1);
         }
 
-        print("debug: Current Balance: ETB $extracted");
         currentBalance = extracted.trim();
         if (currentBalance.endsWith(".")) {
           currentBalance =
               currentBalance.substring(0, currentBalance.length - 1);
         }
       }
-
-      print("debug: Credited amount: $creditedAmount");
-      print("debug: current balance : $currentBalance");
-      print("debug: Transaction ID: $transactionId");
-      print("debug: Last 4 digits: $last4Digits");
 
       return {
         "amount": creditedAmount,
@@ -118,7 +111,6 @@ class SmsUtils {
         cleaned = cleaned.substring(0, cleaned.length - 1);
       }
 
-      print("debug: Extracted Amount: $cleaned");
       totalDebited = double.tryParse(cleaned.trim());
     } else {
       print("debug: Keywords not found.");
@@ -158,7 +150,6 @@ class SmsUtils {
         extracted = extracted.substring(0, extracted.length - 1);
       }
 
-      print("debug: Current Balance: ETB $extracted");
       currentBalance = extracted.trim();
       currentBalance = extracted.trim();
       if (currentBalance.endsWith(".")) {

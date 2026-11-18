@@ -277,7 +277,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     if (transaction == null) {
       if (kDebugMode) {
-        print('debug: Quick categorize: transaction not found for $reference');
+        print('debug: Quick categorize: transaction not found');
       }
       return;
     }

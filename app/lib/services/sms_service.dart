@@ -177,7 +177,7 @@ class SmsService {
   }
 
   void _handleForegroundMessage(SmsMessage message) async {
-    print("debug: Foreground message from ${message.address}: ${message.body}");
+    print("debug: Foreground message from ${message.address}");
     if (message.body == null) return;
 
     try {
@@ -707,7 +707,7 @@ class SmsService {
       smsSubscriptionId: account.smsSubscriptionId,
     );
     await accRepo.saveAccount(updated);
-    print("debug: Account balance updated for ${account.accountHolderName}");
+    print("debug: Account balance updated");
   }
 
   static bool _isAtmWithdrawal(
@@ -752,8 +752,7 @@ class SmsService {
     if (bankId == null || bankId == CashConstants.bankId) return;
 
     if (await _isWithdrawalBeforeCashCutoff(withdrawal)) {
-      print(
-          "debug: Skipping historical ATM cash transfer for ${withdrawal.reference}");
+      print("debug: Skipping historical ATM cash transfer");
       return;
     }
 
@@ -1146,7 +1145,6 @@ class SmsService {
     int? sourceMessageId,
     int? sourceSubscriptionId,
   }) async {
-    print("debug: Processing message: $messageBody");
 
     Bank? bank = await getRelevantBank(
       senderAddress,
@@ -1291,7 +1289,6 @@ class SmsService {
       );
     }
 
-    print("debug: Extracted details: $details");
 
     // Use message date if provided, otherwise use extracted time or current time
     if (messageDate != null && details['time'] == null) {
@@ -1478,7 +1475,7 @@ class SmsService {
       messageId: sourceMessageId,
     );
 
-    print("debug: New transaction saved: ${savedTx.reference}");
+    print("debug: New transaction saved");
 
     if (_isAtmWithdrawal(details, messageBody)) {
       try {

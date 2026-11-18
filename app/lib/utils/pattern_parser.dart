@@ -50,20 +50,16 @@ class PatternParser {
           extracted['patternDescription'] = pattern.description;
 
           if (match.groupNames.contains('amount')) {
-            print("debug: Extracted amount: ${match.namedGroup('amount')}");
             final cleanedAmount = _cleanNumber(match.namedGroup('amount'));
             extracted['amount'] = double.tryParse(cleanedAmount ?? "");
-            print("debug: Extracted amount: ${extracted['amount']}");
           }
           if (match.groupNames.contains('balance')) {
             extracted['currentBalance'] =
                 _cleanNumber(match.namedGroup('balance'));
-            print("debug: Extracted balance: ${extracted['currentBalance']}");
           }
           if (match.groupNames.contains('account')) {
             print("debug: ✓ after account - entering account extraction block");
             String? raw = match.namedGroup('account');
-            print("debug: Raw account value: '$raw'");
 
             if (raw != null) {
               // Use bank configuration for account extraction
@@ -73,18 +69,12 @@ class PatternParser {
                 if (raw.length >= senderBank.maskPattern!) {
                   extracted['accountNumber'] =
                       raw.substring(raw.length - senderBank.maskPattern!);
-                  print(
-                      "Cleaned account (masked): ${extracted['accountNumber']}");
                 } else {
                   extracted['accountNumber'] = raw;
-                  print(
-                      "Cleaned account (fallback): ${extracted['accountNumber']}");
                 }
               } else {
                 // No masking or uniformMasking is false - use full account number
                 extracted['accountNumber'] = raw;
-                print(
-                    "Cleaned account (direct): ${extracted['accountNumber']}");
               }
             } else {
               print("debug: ✗ Raw account is null!");
@@ -95,7 +85,6 @@ class PatternParser {
 
           if (match.groupNames.contains('reference')) {
             extracted['reference'] = match.namedGroup('reference');
-            print("debug: Extracted reference: ${extracted['reference']}");
           }
           if (match.groupNames.contains('type')) {
             final rawType = match.namedGroup('type');
@@ -169,12 +158,6 @@ class PatternParser {
               extracted['reference'] = linkedReference;
             }
           }
-
-          print("debug: account ${extracted["accountNumber"]}");
-          print("debug: amount ${extracted["amount"]}");
-          print("debug: balance ${extracted["currentBalance"]}");
-          print("debug: reference ${extracted["reference"]}");
-          print("debug: receiver ${extracted["receiver"]}");
 
           if (pattern.refRequired == false && extracted["reference"] == null) {
             final fallbackDate = messageDate ?? DateTime.now();
