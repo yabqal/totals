@@ -20,7 +20,7 @@ jobs:
     name: Analyze and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
@@ -30,10 +30,28 @@ jobs:
 
       - run: flutter pub get
 
+      # Analyzer errors and failing tests also show up as annotations on the
+      # run summary, so they can be read without opening the logs.
       - name: Analyze (fails on errors only)
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: |
+          set +e
+          dart analyze --format=machine --no-fatal-warnings > analyze.txt 2>&1
+          status=$?
+          set -e
+          { grep '^ERROR|' analyze.txt || true; } | head -50 |
+            while IFS='|' read -r severity type code file line column length message; do
+              echo "::error file=${file#"$GITHUB_WORKSPACE/"},line=$line,col=$column::$message ($code)"
+            done
+          echo "errors: $(grep -c '^ERROR|' analyze.txt || true)," \
+            "warnings: $(grep -c '^WARNING|' analyze.txt || true)," \
+            "infos: $(grep -c '^INFO|' analyze.txt || true)"
+          if [ "$status" -ne 0 ] && ! grep -q '^ERROR|' analyze.txt; then
+            cat analyze.txt
+          fi
+          exit $status
 
-      - run: flutter test
+      - name: Test
+        run: flutter test --reporter=github
 
   build:
     name: Build APK
@@ -46,9 +64,9 @@ jobs:
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -122,14 +140,25 @@ jobs:
       - name: Build signed release
         if: env.KEYSTORE_BASE64 != ''
         run: |
-          flutter build apk --release --flavor stable
-          flutter build appbundle --release --flavor stable
+          flutter build apk --release --flavor stable 2>&1 | tee build.log
+          flutter build appbundle --release --flavor stable 2>&1 | tee -a build.log
 
       # Debug builds use the qa flavor (detached.totals.test, "totals-test"),
       # which installs next to the Play Store app instead of replacing it.
       - name: Build debug APK
         if: env.KEYSTORE_BASE64 == ''
-        run: flutter build apk --debug --flavor qa
+        run: flutter build apk --debug --flavor qa 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        run: |
+          [ -f build.log ] || exit 0
+          excerpt=$(grep -E -A4 'error:|Error:|ERROR:|FAILURE:|What went wrong' build.log | head -60 || true)
+          [ -n "$excerpt" ] || excerpt=$(tail -40 build.log)
+          excerpt=${excerpt//'%'/'%25'}
+          excerpt=${excerpt//$'\r'/'%0D'}
+          excerpt=${excerpt//$'\n'/'%0A'}
+          echo "::error title=Build failed::$excerpt"
 
       # Artifacts in a public repo are downloadable by anyone signed in to
       # GitHub, so don't keep builds around longer than needed to grab them.
