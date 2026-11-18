@@ -75,6 +75,13 @@ android {
             applicationIdSuffix ".test"
             resValue "string", "app_name", "totals-test"
         }
+        // Self-built release signed with your own key. Its own package, so it
+        // installs next to the Play Store app instead of conflicting with it.
+        personal {
+            dimension "app"
+            applicationIdSuffix ".personal"
+            resValue "string", "app_name", "Totals"
+        }
     }
 
     signingConfigs {

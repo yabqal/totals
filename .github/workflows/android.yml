@@ -53,8 +53,60 @@ jobs:
           fi
           exit $status
 
+      # One test file at a time: several repository tests share the same
+      # sqflite test database and delete it in setUp, so parallel files
+      # wipe each other's data.
       - name: Test
-        run: flutter test --reporter=github
+        run: >-
+          flutter test --concurrency=1 --reporter=github
+          --file-reporter=json:test-results.json
+
+      - name: Report test failures
+        if: failure()
+        run: |
+          [ -f test-results.json ] || exit 0
+          python3 - <<'PY'
+          import json, os
+
+          root = os.environ["GITHUB_WORKSPACE"] + "/"
+          suites, tests, errors, failed = {}, {}, {}, []
+          for line in open("test-results.json"):
+              try:
+                  event = json.loads(line)
+              except ValueError:
+                  continue
+              kind = event.get("type")
+              if kind == "suite":
+                  suites[event["suite"]["id"]] = event["suite"].get("path") or ""
+              elif kind == "testStart":
+                  tests[event["test"]["id"]] = event["test"]
+              elif kind == "error":
+                  errors.setdefault(event["testID"], []).append(event["error"])
+              elif kind == "testDone" and event.get("result") != "success":
+                  failed.append(event["testID"])
+
+          by_file = {}
+          for test_id in failed:
+              test = tests.get(test_id, {})
+              path = suites.get(test.get("suiteID"), "")
+              message = "\n".join(errors.get(test_id, ["(no error message)"]))
+              lines = message.strip().splitlines()[:12]
+              by_file.setdefault(path, []).append(
+                  "- " + test.get("name", "?") + "\n    " + "\n    ".join(lines)
+              )
+
+          def escape(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          # GitHub keeps at most 10 error annotations per step.
+          for path, entries in list(by_file.items())[:9]:
+              body = "\n".join(entries)[:6000]
+              rel = path[len(root):] if path.startswith(root) else path
+              print(f"::error file={rel},title={len(entries)} failed::{escape(body)}")
+          if len(by_file) > 9:
+              rest = ", ".join(p.rsplit("/", 1)[-1] for p in list(by_file)[9:])
+              print(f"::error title=More failing files::{escape(rest)}")
+          PY
 
   build:
     name: Build APK
@@ -116,6 +168,15 @@ jobs:
                 "oauth_client": [],
                 "api_key": [{ "current_key": "placeholder" }],
                 "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000003",
+                  "android_client_info": { "package_name": "detached.totals.personal" }
+                },
+                "oauth_client": [],
+                "api_key": [{ "current_key": "placeholder" }],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
               }
             ],
             "configuration_version": "1"
@@ -129,22 +190,25 @@ jobs:
         if: env.MAPS_API_KEY != ''
         run: echo "MAPS_API_KEY=$MAPS_API_KEY" >> android/local.properties
 
+      # A PKCS12 keystore made with openssl uses one password for the store
+      # and the key, and the alias "upload" unless you chose another.
       - name: Add release signing key
         if: env.KEYSTORE_BASE64 != ''
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
           cat > android/key.properties <<EOF
           storePassword=$KEYSTORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
+          keyPassword=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS:-upload}
           storeFile=upload-keystore.jks
           EOF
 
+      # The personal flavor ("Totals", detached.totals.personal) is the build to
+      # use day to day: release mode, signed with your key, installed next to
+      # the Play Store app. Keep the same key so later builds update it.
       - name: Build signed release
         if: env.KEYSTORE_BASE64 != ''
-        run: |
-          flutter build apk --release --flavor stable 2>&1 | tee build.log
-          flutter build appbundle --release --flavor stable 2>&1 | tee -a build.log
+        run: flutter build apk --release --flavor personal 2>&1 | tee build.log
 
       # Debug builds use the qa flavor (detached.totals.test, "totals-test"),
       # which installs next to the Play Store app instead of replacing it.
@@ -171,5 +235,4 @@ jobs:
           retention-days: 3
           path: |
             app/build/app/outputs/flutter-apk/*.apk
-            app/build/app/outputs/bundle/stableRelease/*.aab
           if-no-files-found: error
